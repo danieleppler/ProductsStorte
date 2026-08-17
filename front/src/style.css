@@ -1,0 +1,218 @@
+@import 'primeicons/primeicons.css';
+
+:root {
+  font-family: Inter, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: #1e293b;
+  background: #f5f7fb;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: #f5f7fb;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #eef4ff 0%, #f8fafc 100%);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.page-shell {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #6366f1;
+  font-weight: 700;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 3vw, 3rem);
+  line-height: 1.1;
+  color: #0f172a;
+}
+
+.table-panel {
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+  padding: 18px 18px 10px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.search-box {
+  position: relative;
+  width: min(100%, 360px);
+}
+
+.search-box i {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+}
+
+.search-box .p-inputtext {
+  width: 100%;
+  padding-left: 40px;
+  border-radius: 12px;
+}
+
+.product-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.product-cell img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.product-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.product-meta .name {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.product-meta small {
+  color: #64748b;
+}
+
+.p-datatable-table {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.p-datatable-thead > tr > th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+}
+
+.p-datatable-tbody > tr > td {
+  vertical-align: middle;
+  padding-block: 1rem;
+}
+
+.api-warning {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff7ed;
+  border: 1px solid #fdba74;
+  color: #9a5b00;
+  font-size: 0.9rem;
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.product-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.field-group {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.field-group label {
+  font-weight: 600;
+  color: #334155;
+}
+
+.field-group .p-inputtext,
+.field-group .p-textarea {
+  width: 100%;
+}
+
+.delete-confirmation {
+  margin: 0;
+  color: #334155;
+  line-height: 1.6;
+}
+
+.p-dialog .p-dialog-content {
+  padding-top: 1rem;
+}
+
+@media (max-width: 768px) {
+  .page-shell {
+    padding: 24px 14px 52px;
+  }
+
+  .page-header,
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .search-box {
+    width: 100%;
+  }
+}
