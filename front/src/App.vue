@@ -54,6 +54,7 @@ const advanceSku = (value) => {
 
 const fetchNextSkuFromBackend = async () => {
   try {
+    //FIXME: need to change to single api url
     const apiBaseUrl = API_URLS[0].replace(/\/products$/, '')
     const response = await fetch(`${apiBaseUrl}/products/next-sku`)
 
@@ -77,6 +78,7 @@ const ensureNextSku = async () => {
     return skuCache.value
   }
 
+  //Prevent double backend fetching 
   if (!skuRequest) {
     skuRequest = fetchNextSkuFromBackend().finally(() => {
       skuRequest = null
@@ -141,7 +143,7 @@ const readPaginationFromUrl = () => {
   const size = Number(params.get('pageSize') ?? '5')
 
 
-  //isFinite check seems to be reduntant 
+  //FIXME: isFinite check seems to be reduntant 
   currentPage.value = Number.isFinite(page) && page > 0 ? page : 1
   pageSize.value = Number.isFinite(size) && size > 0 ? size : 5
 }
@@ -157,6 +159,7 @@ const loadProducts = async (page = currentPage.value, size = pageSize.value) => 
   try {
     let lastError = null
 
+    //FIXME: why several urls ? 
     for (const apiUrl of API_URLS) {
       try {
         const url = `${apiUrl}?page=${page}&pageSize=${size}`
@@ -190,6 +193,7 @@ const loadProducts = async (page = currentPage.value, size = pageSize.value) => 
 const saveProduct = async () => {
   submitting.value = true
 
+  //FIXME: configure other default image 
   const payload = {
     code: productForm.code.trim() || getNextSkuFromCache(),
     name: productForm.name.trim(),
@@ -204,6 +208,7 @@ const saveProduct = async () => {
     if (dialogMode.value === 'edit' && productForm.id) {
       let updatedProduct = null
 
+      //FIXME: singular api
       for (const apiUrl of API_URLS) {
         try {
               console.log('Updating product', productForm.id, 'at', `${apiUrl}/${productForm.id}`)
@@ -234,6 +239,7 @@ const saveProduct = async () => {
     } else {
       let savedProduct = null
 
+      //FIXME: singular api
       for (const apiUrl of API_URLS) {
         try {
 console.log('Creating product at', apiUrl)
@@ -287,7 +293,7 @@ const deleteProduct = async () => {
 
   try {
     let deleted = false
-
+//FIXME: singular api
     for (const apiUrl of API_URLS) {
       try {
         console.log('Deleting product', productToDelete.value.id, 'at', `${apiUrl}/${productToDelete.value.id}`)
@@ -343,12 +349,7 @@ const filteredProducts = computed(() => {
 })
 
 const totalProducts = computed(() => products.value.length)
-const activeProducts = computed(() => {
-  const today = new Date()
-  return products.value.filter((product) => new Date(product.saleStartDate) <= today).length
-})
 
-const comingSoonProducts = computed(() => products.value.length)
 
 const escapeCsvValue = (value) => {
   const stringValue = String(value ?? '')
@@ -391,6 +392,10 @@ const formatDate = (dateString) =>
     month: 'short',
     day: 'numeric',
   }).format(new Date(dateString))
+
+const onSort = (event) =>{
+  console.log("sort clicked")
+}
 </script>
 
 <template>
@@ -407,7 +412,7 @@ const formatDate = (dateString) =>
       <div class="toolbar">
         <div class="search-box">
           <i class="pi pi-search" />
-          <InputText v-model="search" placeholder="Search products..." />
+          <InputText v-model="search" placeholder="Search products...(you can search by code, name, and description)" />
         </div>
         <Button label="Export" icon="pi pi-download" severity="secondary" outlined @click="exportToExcel" />
       </div>
@@ -425,7 +430,9 @@ const formatDate = (dateString) =>
         :lazy="true"
         :loading="loading"
         @page="onPage"
+        @sort="onSort"
       >
+      
         <Column field="code" header="Product Code" sortable />
 
         <Column field="name" header="Product Name" sortable>
@@ -434,7 +441,6 @@ const formatDate = (dateString) =>
               <img :src="data.image" :alt="data.name" />
               <div class="product-meta">
                 <span class="name">{{ data.name }}</span>
-                <small>{{ data.code }}</small>
               </div>
             </div>
           </template>
