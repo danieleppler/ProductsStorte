@@ -6,16 +6,19 @@ using System.Text.RegularExpressions;
 public class ProductsRepository : IProductsRepository
 {
     private string _connectionString;
+    private readonly ILogger<ProductsRepository> _logger;
 
-    public ProductsRepository(string connectionString)
+    public ProductsRepository(string connectionString,ILogger<ProductsRepository> logger)
     {
         _connectionString = connectionString;
+        _logger = logger;
     }
 
     public void InitializeDatabase()
     {
         using var connection = new SqlConnection(_connectionString);
         connection.Open();
+        _logger.LogDebug("Initalizing databaes");   
 
         using var command = new SqlCommand(@"
             IF OBJECT_ID(N'dbo.Products', N'U') IS NULL
@@ -34,7 +37,9 @@ public class ProductsRepository : IProductsRepository
             BEGIN
                 EXEC('CREATE PROCEDURE dbo.sp_Products_GetPageJson
                     @Page INT = 1,
-                    @PageSize INT = 6
+                    @PageSize INT = 5,
+                    @SortBy NVARCHAR = 'Id'
+                    @SortOrder NVARCHAR = 'ASC'
                 AS
                 BEGIN
                     SET NOCOUNT ON;
@@ -57,8 +62,8 @@ public class ProductsRepository : IProductsRepository
                                     p.Description,
                                     p.SaleStartDate,
                                     p.Image
-                                FROM dbo.Products p
-                                ORDER BY p.Id
+                                FROM dbo.Products p 
+                                ORDER BY 'QUOTENAME(@SortField)' @SortOrder  
                                 OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
                                 FOR JSON PATH
                             )
@@ -234,7 +239,7 @@ public class ProductsRepository : IProductsRepository
         return pageResult.Items;
     }
 
-    public async Task<PagedResult<Product>> GetPageAsync(int page, int pageSize)
+    public async Task<PagedResult<Product>> GetPageAsync(int page, int pageSize, string sortBy ="Id", string sortOrder = "ASC")
     {
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -245,6 +250,8 @@ public class ProductsRepository : IProductsRepository
         };
         command.Parameters.Add("@Page", SqlDbType.Int).Value = page;
         command.Parameters.Add("@PageSize", SqlDbType.Int).Value = pageSize;
+        command.Parameters.Add("@SortBy",SqlDbType.VarChar).Value = sortBy;
+        command.Parameters.Add("@SortOrder",SqlDbType.VarChar).Value = sortOrder;
 
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
@@ -261,7 +268,7 @@ public class ProductsRepository : IProductsRepository
             Page = root.TryGetProperty("Page", out var pageElement) ? pageElement.GetInt32() : page,
             PageSize = root.TryGetProperty("PageSize", out var sizeElement) ? sizeElement.GetInt32() : pageSize,
             TotalCount = root.TryGetProperty("TotalCount", out var totalElement) ? totalElement.GetInt32() : 0,
-            Items = new List<Product>()
+            Items = []
         };
 
         if (root.TryGetProperty("Items", out var itemsElement) && itemsElement.ValueKind == JsonValueKind.Array)
@@ -459,4 +466,6 @@ public class ProductsRepository : IProductsRepository
         var rows = await command.ExecuteNonQueryAsync();
         return rows > 0;
     }
+
+  
 }

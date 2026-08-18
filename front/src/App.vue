@@ -10,9 +10,8 @@ import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import mockProducts from './data/products'
 
-const API_URLS = [
-  'http://localhost:5000/products',
-]
+const API_URL = 'http://localhost:5000/products',
+
 
 const products = ref([])
 const search = ref('')
@@ -89,7 +88,6 @@ const ensureNextSku = async () => {
 }
 }
 
-
 const emptyProductForm = (prefillSku = '') => ({
   id: null,
   code: prefillSku || '',
@@ -128,10 +126,12 @@ const openEditDialog = (product) => {
 
 // read/synce pagination params from/to url
 
-const syncUrlWithPagination = (page = currentPage.value, size = pageSize.value) => {
+const syncUrlWithPagination = (page = currentPage.value, size = pageSize.value,sortBy = "Id",sortOrder = "1") => {
   const params = new URLSearchParams(window.location.search)
-  params.set('page', String(page))
-  params.set('pageSize', String(size))
+  params.set('page',page)
+  params.set('pageSize', size)
+  params.set('sortBy',id)
+  params.set('sortOrder',sordOrder)
 
   const nextUrl = `${window.location.pathname}?${params.toString()}`
   window.history.replaceState({}, '', nextUrl)
@@ -148,21 +148,17 @@ const readPaginationFromUrl = () => {
   pageSize.value = Number.isFinite(size) && size > 0 ? size : 5
 }
 
-const loadProducts = async (page = currentPage.value, size = pageSize.value) => {
+const loadProducts = async (page = currentPage.value, size = pageSize.value,sortBy = "Id",sortOrder = "1") => {
   loading.value = true
   error.value = ''
   currentPage.value = page
   pageSize.value = size
-  syncUrlWithPagination(page, size)
+  syncUrlWithPagination(page, size,sortBy,sordOrder)
   console.log('Loading products from API...', { page, pageSize: size })
 
   try {
-    let lastError = null
-
-    //FIXME: why several urls ? 
-    for (const apiUrl of API_URLS) {
-      try {
-        const url = `${apiUrl}?page=${page}&pageSize=${size}`
+   
+        const url = `${API_URL}?page=${page}&pageSize=${size}&sortBy=${sortBy}&sortOrder=${sortOrder}`
         console.log('Fetching products from', url)
         const response = await fetch(url)
 
@@ -172,15 +168,10 @@ const loadProducts = async (page = currentPage.value, size = pageSize.value) => 
 
         const data = await response.json()
         products.value = data.items ?? data
-        totalRecords.value = data.totalCount ?? products.value.length
+        totalRecords.value = data.totalCount ?? products.value.length // trying to get total products value, if we dont have it , fetch the current products size
         return
-      } catch (err) {
-        lastError = err
-      }
     }
-
-    throw lastError ?? new Error('Unable to fetch products from API')
-  } catch (err) {
+    catch (err) {
     const startIndex = (page - 1) * size
     products.value = mockProducts.slice(startIndex, startIndex + size)
     totalRecords.value = mockProducts.length
@@ -394,7 +385,7 @@ const formatDate = (dateString) =>
   }).format(new Date(dateString))
 
 const onSort = (event) =>{
-  console.log("sort clicked")
+  loadProducts(currentPage,event.rows,event.sortField,event.sortOrder)
 }
 </script>
 

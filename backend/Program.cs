@@ -1,3 +1,5 @@
+using Microsoft.VisualBasic;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
@@ -16,7 +18,8 @@ builder.Services.AddCors(options =>
 var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? "Server=localhost;Database=ProductsDb;Trusted_Connection=True;TrustServerCertificate=True;";
 
-builder.Services.AddSingleton<IProductsRepository>(_ => new ProductsRepository(defaultConnection));
+builder.Services.AddSingleton<IProductsRepository>(sp => 
+new ProductsRepository(defaultConnection,sp.GetRequiredService<ILogger<ProductsRepository>>()));
 
 var app = builder.Build();
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ProductsApi");
@@ -33,13 +36,17 @@ app.UseHttpsRedirection();
 var repository = app.Services.GetRequiredService<IProductsRepository>();
 repository.InitializeDatabase();
 
-app.MapGet("/products", async (IProductsRepository repo, int page = 1, int pageSize = 6) =>
+app.MapGet("/products", async (IProductsRepository repo, int page = 1, int pageSize = 5,string sortBy ="Id",int sortOrder = 1) =>
 {
     var normalizedPage = Math.Max(1, page);
     var normalizedPageSize = Math.Clamp(pageSize <= 0 ? 6 : pageSize, 1, 50);
 
+    var allowedSortingFields = typeof(Product).GetProperties().Select(p => p.Name).ToArray();
+    var normalizedSortBy = allowedSortingFields.Contains(sortBy) ? sortBy : "Id" ;     
+    var normalizedSortOrder = sortOrder == 1 ? "ASC" : "DESC";
+
     logger.LogInformation("Fetching products page {Page} with page size {PageSize}", normalizedPage, normalizedPageSize);
-    var result = await repo.GetPageAsync(normalizedPage, normalizedPageSize);
+    var result = await repo.GetPageAsync(normalizedPage, normalizedPageSize,normalizedSortBy,normalizedSortOrder);
     return Results.Ok(result);
 });
 
@@ -95,14 +102,6 @@ app.MapDelete("/products/{id:int}", async (int id, IProductsRepository repo) =>
 });
 
 app.Run();
-
-public class PagedResult<T>
-{
-    public int Page { get; set; }
-    public int PageSize { get; set; }
-    public int TotalCount { get; set; }
-    public List<T> Items { get; set; } = new();
-}
 
 public record CreateProductRequest(
     string Code,
