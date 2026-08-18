@@ -1,4 +1,6 @@
 using Microsoft.VisualBasic;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,6 +8,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    options.SerializerOptions.PropertyNameCaseInsensitive = true;
+});
 
 builder.Services.AddCors(options =>
 {
@@ -38,9 +45,58 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 
 var repository = app.Services.GetRequiredService<IProductsRepository>();
-repository.InitializeDatabase();
+try
+{
+    repository.InitializeDatabase();
+}
+catch (Exception ex)
+{
+    logger.LogWarning(ex, "Database initialization failed. The API will continue running without a database connection.");
+}
+
+app.MapPost("/products/upload-image", async (IFormFile file, IWebHostEnvironment env) =>
+{
+    if (file is null || file.Length == 0)
+    {
+        return Results.BadRequest(new { error = "Please choose an image file to upload." });
+    }
+
+    var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"
+    };
+
+    var extension = Path.GetExtension(file.FileName);
+    var contentTypeLooksLikeImage = file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+    var extensionLooksLikeImage = !string.IsNullOrWhiteSpace(extension) && allowedExtensions.Contains(extension);
+
+    if (!contentTypeLooksLikeImage && !extensionLooksLikeImage)
+    {
+        return Results.BadRequest(new
+        {
+            error = "Unsupported file type. Please upload a standard image like JPG, PNG, GIF, WEBP, SVG, or BMP."
+        });
+    }
+
+    var uploadsFolder = Path.Combine(env.WebRootPath ?? Path.Combine(env.ContentRootPath, "wwwroot"), "images", "products");
+    Directory.CreateDirectory(uploadsFolder);
+
+    var fileName = Path.GetFileNameWithoutExtension(file.FileName);
+    fileName = Regex.Replace(fileName, @"[^a-zA-Z0-9._-]+", "-");
+    var uniqueFileName = $"{fileName}-{Guid.NewGuid():N}{extension}";
+    var destination = Path.Combine(uploadsFolder, uniqueFileName);
+
+    await using (var stream = File.Create(destination))
+    {
+        await file.CopyToAsync(stream);
+    }
+
+    var relativePath = $"/images/products/{uniqueFileName}";
+    return Results.Ok(new { path = relativePath, fileName = uniqueFileName });
+}).DisableAntiforgery();
 
 app.MapGet("/products", async (IProductsRepository repo, int page = 1, int pageSize = 5,string sortBy ="Id",int sortOrder = 1) =>
 {

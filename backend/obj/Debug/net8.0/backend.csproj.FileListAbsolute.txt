@@ -214,3 +214,4 @@ c:\Projects\ProductsStore\backend\obj\Debug\net8.0\refint\backend.dll
 c:\Projects\ProductsStore\backend\obj\Debug\net8.0\backend.pdb
 c:\Projects\ProductsStore\backend\obj\Debug\net8.0\backend.genruntimeconfig.cache
 c:\Projects\ProductsStore\backend\obj\Debug\net8.0\ref\backend.dll
+C:\Projects\ProductsStore\backend\bin\Debug\net8.0\backend.staticwebassets.runtime.json

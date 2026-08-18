@@ -1,7 +1,8 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
+import Checkbox from 'primevue/checkbox'
 import Column from 'primevue/column'
 import DataTable from 'primevue/datatable'
 import Dialog from 'primevue/dialog'
@@ -12,6 +13,36 @@ import mockProducts from './data/products'
 
 const API_URL = 'http://localhost:5000/products'
 const API_URLS = [API_URL]
+const API_BASE_URL = API_URL.replace(/\/products$/, '')
+
+const resolveImageUrl = (imagePath) => {
+  if (!imagePath) {
+    return '/images/products/default-product.svg'
+  }
+
+  if (/^https?:\/\//i.test(imagePath)) {
+    return imagePath
+  }
+
+  if (imagePath.startsWith('/')) {
+    return `${API_BASE_URL}${imagePath}`
+  }
+
+  return imagePath
+}
+
+const normalizeProduct = (product = {}) => ({
+  ...product,
+  inStock: (() => {
+    const val = product.inStock ?? product.InStock
+    if (typeof val === 'boolean') return val
+    if (val === 1 || val === '1' || val === true || val === 'true') return true
+    if (val === 0 || val === '0' || val === false || val === 'false') return false
+    return true
+  })(),
+  saleStartDate: product.saleStartDate ?? product.SaleStartDate,
+  image: product.image ?? product.Image ?? '/images/products/default-product.svg',
+})
 
 const products = ref([])
 const search = ref('')
@@ -20,6 +51,15 @@ const error = ref('')
 const showAddDialog = ref(false)
 const showDeleteDialog = ref(false)
 const submitting = ref(false)
+const selectedImageFile = ref(null)
+const dialogErrorRef = ref(null)
+
+const focusErrorBanner = () => {
+  if (dialogErrorRef.value) {
+    dialogErrorRef.value.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    dialogErrorRef.value.focus()
+  }
+}
 
 const dialogMode = ref('create')
 const productToDelete = ref(null)
@@ -95,18 +135,21 @@ const emptyProductForm = (prefillSku = '') => ({
   description: '',
   saleStartDate: new Date().toISOString().slice(0, 10),
   inStock: true,
-  image: '',
+  image: '/images/products/default-product.svg',
 })
 
 const productForm = reactive(emptyProductForm())
 
 const resetProductForm = (keepGeneratedSku = false) => {
   const nextSku = keepGeneratedSku ? productForm.code || getNextSkuFromCache() : getNextSkuFromCache()
+  error.value = ''
+  selectedImageFile.value = null
   Object.assign(productForm, emptyProductForm(nextSku))
 }
 
 const openCreateDialog = async () => {
   dialogMode.value = 'create'
+  error.value = ''
   const nextSku = await ensureNextSku()
   console.log("Managed to fetch next SKU from backend:", nextSku)
   Object.assign(productForm, emptyProductForm(nextSku))
@@ -115,6 +158,7 @@ const openCreateDialog = async () => {
 
 const openEditDialog = (product) => {
   dialogMode.value = 'edit'
+  error.value = ''
  
   Object.assign(productForm, {
     id: product.id,
@@ -170,44 +214,96 @@ const loadProducts = async (page = currentPage.value, size = pageSize.value, sor
         }
 
         const data = await response.json()
-        products.value = data.items ?? data
-        totalRecords.value = data.totalCount ?? products.value.length // trying to get total products value, if we dont have it , fetch the current products size
+        const normalizedProducts = (data.items ?? data ?? []).map(normalizeProduct)
+        products.value = normalizedProducts
+        totalRecords.value = data.totalCount ?? normalizedProducts.length
         return
     }
     catch (err) {
-    const startIndex = (page - 1) * size
-    products.value = mockProducts.slice(startIndex, startIndex + size)
-    totalRecords.value = mockProducts.length
-    error.value = 'API unavailable. Showing mock product data.'
+    console.error('Failed to load products from API:', err)
+    error.value = 'Unable to load products from the API. The database may be unavailable.'
+    totalRecords.value = products.value.length || 0
   } finally {
     loading.value = false
   }
 }
 
-const saveProduct = async () => {
-  submitting.value = true
- console.log('saving product:', productForm,'InStock:', productForm.inStock)
-  //FIXME: configure other default image 
-  const payload = {
-    code: productForm.code.trim() || getNextSkuFromCache(),
-    name: productForm.name.trim(),
-    description: productForm.description.trim(),
-    saleStartDate: productForm.saleStartDate,
-    inStock: !!productForm.inStock,
-    image: productForm.image.trim() || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
+const uploadProductImage = (event) => {
+  const file = event?.target?.files?.[0]
+  if (!file) {
+    selectedImageFile.value = null
+    return
   }
 
-  console.log('Saving product payload:', payload)
+  selectedImageFile.value = file
+  productForm.image = URL.createObjectURL(file)
+  error.value = ''
+}
+
+const uploadSelectedImage = async () => {
+  if (!selectedImageFile.value) {
+    return productForm.image || '/images/products/default-product.svg'
+  }
+
+  const formData = new FormData()
+  formData.append('file', selectedImageFile.value, selectedImageFile.value.name)
+
+  const apiBaseUrl = API_URLS[0].replace(/\/products$/, '')
+  const response = await fetch(`${apiBaseUrl}/products/upload-image`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    let detail = 'Could not upload the selected image.'
+
+    try {
+      const parsed = JSON.parse(text)
+      detail = parsed?.error || detail
+    } catch {
+      detail = text || detail
+    }
+
+    throw new Error(detail)
+  }
+
+  const payload = await response.json()
+  selectedImageFile.value = null
+  return payload.path || '/images/products/default-product.svg'
+}
+
+const saveProduct = async () => {
+  const trimmedName = productForm.name.trim()
+  if (!trimmedName) {
+    error.value = 'Product name is required.'
+    nextTick(focusErrorBanner)
+    return
+  }
+
+  submitting.value = true
+  console.log('saving product:', productForm, 'InStock:', productForm.inStock)
 
   try {
+    const uploadedImage = await uploadSelectedImage()
+    const payload = {
+      code: productForm.code.trim() || getNextSkuFromCache(),
+      name: trimmedName,
+      description: productForm.description.trim(),
+      saleStartDate: productForm.saleStartDate,
+      inStock: !!productForm.inStock,
+      image: uploadedImage,
+    }
+
+    console.log('Saving product payload:', payload)
+
     if (dialogMode.value === 'edit' && productForm.id) {
       let updatedProduct = null
 
-      //FIXME: singular api
       for (const apiUrl of API_URLS) {
         try {
-              console.log('Updating product', productForm.id, 'at', `${apiUrl}/${productForm.id}`)
-        const response = await fetch(`${apiUrl}/${productForm.id}`, {
+          console.log('Updating product', productForm.id, 'at', `${apiUrl}/${productForm.id}`)
+          const response = await fetch(`${apiUrl}/${productForm.id}`, {
             method: 'PUT',
             headers: {
               'Content-Type': 'application/json',
@@ -227,18 +323,20 @@ const saveProduct = async () => {
       }
 
       if (updatedProduct) {
-        products.value = products.value.map((product) => product.id === productForm.id ? { ...product, ...updatedProduct } : product)
+        const normalizedUpdatedProduct = normalizeProduct(updatedProduct)
+        products.value = products.value.map((product) => product.id === productForm.id
+          ? { ...product, ...normalizedUpdatedProduct, inStock: normalizedUpdatedProduct.inStock, id: product.id }
+          : product)
       } else {
-        products.value = products.value.map((product) => product.id === productForm.id ? { ...product, ...payload, id: product.id } : product)
+        products.value = products.value.map((product) => product.id === productForm.id ? { ...product, ...payload, inStock: !!payload.inStock, id: product.id } : product)
       }
     } else {
       let savedProduct = null
 
-      //FIXME: singular api
       for (const apiUrl of API_URLS) {
         try {
-        console.log('Creating product at', apiUrl)
-        const response = await fetch(apiUrl, {
+          console.log('Creating product at', apiUrl)
+          const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -258,7 +356,7 @@ const saveProduct = async () => {
       }
 
       if (savedProduct) {
-        products.value = [savedProduct, ...products.value]
+        products.value = [normalizeProduct(savedProduct), ...products.value]
       } else {
         products.value = [{
           id: Date.now(),
@@ -271,6 +369,10 @@ const saveProduct = async () => {
 
     showAddDialog.value = false
     resetProductForm(true)
+  } catch (err) {
+    console.error('Failed to save product:', err)
+    error.value = err instanceof Error ? err.message : 'Could not save the product.'
+    nextTick(focusErrorBanner)
   } finally {
     submitting.value = false
   }
@@ -412,8 +514,6 @@ const onSort = (event) =>{
         <Button label="Export" icon="pi pi-download" severity="secondary" outlined @click="exportToExcel" />
       </div>
 
-      <p v-if="error" class="api-warning">{{ error }}</p>
-
       <DataTable
         :value="filteredProducts"
         tableStyle="min-width: 100%"
@@ -434,7 +534,7 @@ const onSort = (event) =>{
         <Column field="name" header="Product Name" sortable>
           <template #body="{ data }">
             <div class="product-cell">
-              <img :src="data.image" :alt="data.name" />
+              <img :src="resolveImageUrl(data.image)" :alt="data.name" />
               <div class="product-meta">
                 <span class="name">{{ data.name }}</span>
               </div>
@@ -492,6 +592,8 @@ const onSort = (event) =>{
     :breakpoints="{ '960px': '90vw' }"
   >
     <div class="product-form">
+      <p v-if="error" ref="dialogErrorRef" tabindex="-1" class="api-warning dialog-inline-error" role="alert">{{ error }}</p>
+
       <div class="field-group">
         <label for="product-code">SKU</label>
         <InputText id="product-code" v-model="productForm.code" :disabled="true" readonly placeholder="SKU-ABC123" />
@@ -513,15 +615,18 @@ const onSort = (event) =>{
       </div>
 
       <div class="field-group checkbox-field">
-        <label for="product-instock">
-          <input id="product-instock" v-model="productForm.inStock" type="checkbox" />
-          In Stock
-        </label>
+        <div class="checkbox-wrapper">
+          <Checkbox id="product-instock" v-model="productForm.inStock" :binary="true" />
+          <label for="product-instock">In Stock</label>
+        </div>
       </div>
 
       <div class="field-group">
-        <label for="product-image">Product Image URL</label>
-        <InputText id="product-image" v-model="productForm.image" placeholder="https://example.com/image.jpg" />
+        <label for="product-image">Product Image</label>
+        <input id="product-image" type="file" accept="image/*" @change="uploadProductImage" />
+        <div v-if="productForm.image" class="uploaded-image-preview">
+          <img :src="resolveImageUrl(productForm.image)" :alt="productForm.name || 'Product preview'" />
+        </div>
       </div>
     </div>
 

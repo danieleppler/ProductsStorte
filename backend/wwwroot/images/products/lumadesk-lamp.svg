@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 420" role="img" aria-label="LumaDesk Lamp">
+  <rect width="640" height="420" fill="#fef3c7"/>
+  <rect x="250" y="60" width="140" height="36" rx="18" fill="#f59e0b"/>
+  <path d="M290 96 L350 96 L390 270 L250 270 Z" fill="#fbbf24"/>
+  <rect x="280" y="270" width="80" height="78" rx="16" fill="#0f172a"/>
+  <rect x="230" y="348" width="180" height="16" rx="8" fill="#374151"/>
+  <circle cx="320" cy="178" r="44" fill="#fff7ed" opacity="0.9"/>
+  <path d="M320 136 L335 176 L320 216 L305 176 Z" fill="#f59e0b"/>
+  <text x="320" y="382" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="22" fill="#0f172a" font-weight="700">LumaDesk</text>
+</svg>
