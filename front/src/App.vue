@@ -10,8 +10,8 @@ import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import mockProducts from './data/products'
 
-const API_URL = 'http://localhost:5000/products',
-
+const API_URL = 'http://localhost:5000/products'
+const API_URLS = [API_URL]
 
 const products = ref([])
 const search = ref('')
@@ -20,7 +20,7 @@ const error = ref('')
 const showAddDialog = ref(false)
 const showDeleteDialog = ref(false)
 const submitting = ref(false)
-const deleting = ref(false)
+
 const dialogMode = ref('create')
 const productToDelete = ref(null)
 const pageSize = ref(5)
@@ -29,8 +29,8 @@ const totalRecords = ref(0)
 const skuCache = ref(null)
 let skuRequest = null
 
-//SKU Functions
-{
+
+
 const parseSkuNumber = (value) => {
   const match = String(value ?? '').match(/(\d+)(?!.*\d)/)
   return match ? Number(match[1]) : null
@@ -86,7 +86,7 @@ const ensureNextSku = async () => {
 
   return skuRequest
 }
-}
+
 
 const emptyProductForm = (prefillSku = '') => ({
   id: null,
@@ -94,6 +94,7 @@ const emptyProductForm = (prefillSku = '') => ({
   name: '',
   description: '',
   saleStartDate: new Date().toISOString().slice(0, 10),
+  inStock: true,
   image: '',
 })
 
@@ -107,18 +108,21 @@ const resetProductForm = (keepGeneratedSku = false) => {
 const openCreateDialog = async () => {
   dialogMode.value = 'create'
   const nextSku = await ensureNextSku()
+  console.log("Managed to fetch next SKU from backend:", nextSku)
   Object.assign(productForm, emptyProductForm(nextSku))
   showAddDialog.value = true
 }
 
 const openEditDialog = (product) => {
   dialogMode.value = 'edit'
+ 
   Object.assign(productForm, {
     id: product.id,
     code: product.code || '',
     name: product.name || '',
     description: product.description || '',
     saleStartDate: product.saleStartDate ? new Date(product.saleStartDate).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+    inStock: product.inStock ?? true,
     image: product.image || '',
   })
   showAddDialog.value = true
@@ -126,12 +130,12 @@ const openEditDialog = (product) => {
 
 // read/synce pagination params from/to url
 
-const syncUrlWithPagination = (page = currentPage.value, size = pageSize.value,sortBy = "Id",sortOrder = "1") => {
+const syncUrlWithPagination = (page = currentPage.value, size = pageSize.value, sortBy = 'Id', sortOrder = '1') => {
   const params = new URLSearchParams(window.location.search)
-  params.set('page',page)
-  params.set('pageSize', size)
-  params.set('sortBy',id)
-  params.set('sortOrder',sordOrder)
+  params.set('page', String(page))
+  params.set('pageSize', String(size))
+  params.set('sortBy', sortBy)
+  params.set('sortOrder', sortOrder)
 
   const nextUrl = `${window.location.pathname}?${params.toString()}`
   window.history.replaceState({}, '', nextUrl)
@@ -148,14 +152,13 @@ const readPaginationFromUrl = () => {
   pageSize.value = Number.isFinite(size) && size > 0 ? size : 5
 }
 
-const loadProducts = async (page = currentPage.value, size = pageSize.value,sortBy = "Id",sortOrder = "1") => {
+const loadProducts = async (page = currentPage.value, size = pageSize.value, sortBy = 'Id', sortOrder = '1') => {
   loading.value = true
   error.value = ''
   currentPage.value = page
   pageSize.value = size
-  syncUrlWithPagination(page, size,sortBy,sordOrder)
+  syncUrlWithPagination(page, size, sortBy, sortOrder)
   console.log('Loading products from API...', { page, pageSize: size })
-
   try {
    
         const url = `${API_URL}?page=${page}&pageSize=${size}&sortBy=${sortBy}&sortOrder=${sortOrder}`
@@ -183,13 +186,14 @@ const loadProducts = async (page = currentPage.value, size = pageSize.value,sort
 
 const saveProduct = async () => {
   submitting.value = true
-
+ console.log('saving product:', productForm,'InStock:', productForm.inStock)
   //FIXME: configure other default image 
   const payload = {
     code: productForm.code.trim() || getNextSkuFromCache(),
     name: productForm.name.trim(),
     description: productForm.description.trim(),
     saleStartDate: productForm.saleStartDate,
+    inStock: !!productForm.inStock,
     image: productForm.image.trim() || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=800&q=80',
   }
 
@@ -233,7 +237,7 @@ const saveProduct = async () => {
       //FIXME: singular api
       for (const apiUrl of API_URLS) {
         try {
-console.log('Creating product at', apiUrl)
+        console.log('Creating product at', apiUrl)
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
@@ -280,7 +284,7 @@ const confirmDelete = (product) => {
 const deleteProduct = async () => {
   if (!productToDelete.value) return
 
-  deleting.value = true
+  
 
   try {
     let deleted = false
@@ -305,7 +309,7 @@ const deleteProduct = async () => {
       products.value = products.value.filter((product) => product.id !== productToDelete.value.id)
     }
   } finally {
-    deleting.value = false
+
     showDeleteDialog.value = false
     productToDelete.value = null
   }
@@ -385,7 +389,7 @@ const formatDate = (dateString) =>
   }).format(new Date(dateString))
 
 const onSort = (event) =>{
-  loadProducts(currentPage,event.rows,event.sortField,event.sortOrder)
+  loadProducts(currentPage.value,event.rows,event.sortField,event.sortOrder)
 }
 </script>
 
@@ -422,6 +426,7 @@ const onSort = (event) =>{
         :loading="loading"
         @page="onPage"
         @sort="onSort"
+        :rows-per-page-options="[5,10,20,50]"
       >
       
         <Column field="code" header="Product Code" sortable />
@@ -438,6 +443,14 @@ const onSort = (event) =>{
         </Column>
 
         <Column field="description" header="Description" sortable />
+
+        <Column field="inStock" header="In Stock" sortable>
+          <template #body="{ data }">
+            <Tag :severity="data.inStock ? 'success' : 'danger'">
+              {{ data.inStock ? 'Yes' : 'No' }}
+            </Tag>
+          </template>
+        </Column>
 
         <Column field="saleStartDate" header="Sale Start Date" sortable>
           <template #body="{ data }">
@@ -499,6 +512,13 @@ const onSort = (event) =>{
         <InputText id="product-date" v-model="productForm.saleStartDate" type="date" />
       </div>
 
+      <div class="field-group checkbox-field">
+        <label for="product-instock">
+          <input id="product-instock" v-model="productForm.inStock" type="checkbox" />
+          In Stock
+        </label>
+      </div>
+
       <div class="field-group">
         <label for="product-image">Product Image URL</label>
         <InputText id="product-image" v-model="productForm.image" placeholder="https://example.com/image.jpg" />
@@ -534,7 +554,7 @@ const onSort = (event) =>{
 
     <template #footer>
       <Button label="Cancel" severity="secondary" text @click="showDeleteDialog = false" />
-      <Button label="Delete" icon="pi pi-trash" severity="danger" :loading="deleting" @click="deleteProduct" />
+      <Button label="Delete" icon="pi pi-trash" severity="danger" @click="deleteProduct" />
     </template>
   </Dialog>
 </template>

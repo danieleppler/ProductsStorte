@@ -16,6 +16,8 @@ public class ProductsRepository : IProductsRepository
 
     public void InitializeDatabase()
     {
+
+        EnsureDatabaseFileExists();
         using var connection = new SqlConnection(_connectionString);
         connection.Open();
         _logger.LogDebug("Initalizing databaes");   
@@ -29,48 +31,51 @@ public class ProductsRepository : IProductsRepository
                     Name NVARCHAR(200) NOT NULL,
                     Description NVARCHAR(MAX) NULL,
                     SaleStartDate DATE NOT NULL,
+                    InStock BIT NOT NULL DEFAULT 1,
                     Image NVARCHAR(500) NULL
                 );
             END;
 
-            IF OBJECT_ID(N'dbo.sp_Products_GetPageJson', N'P') IS NULL
-            BEGIN
-                EXEC('CREATE PROCEDURE dbo.sp_Products_GetPageJson
-                    @Page INT = 1,
-                    @PageSize INT = 5,
-                    @SortBy NVARCHAR = 'Id'
-                    @SortOrder NVARCHAR = 'ASC'
-                AS
-                BEGIN
-                    SET NOCOUNT ON;
+           IF OBJECT_ID(N'dbo.sp_Products_GetPageJson', N'P') IS NULL
+BEGIN
+    EXEC('CREATE PROCEDURE dbo.sp_Products_GetPageJson
+        @Page INT = 1,
+        @PageSize INT = 5,
+        @SortBy NVARCHAR(50) = ''Id'',
+        @SortOrder NVARCHAR(4) = ''ASC''
+    AS
+    BEGIN
+        SET NOCOUNT ON;
 
-                    DECLARE @TotalCount INT = (SELECT COUNT(*) FROM dbo.Products);
-                    DECLARE @TotalPages INT = CASE WHEN @TotalCount = 0 THEN 1 ELSE CEILING(CAST(@TotalCount AS DECIMAL(18,2)) / @PageSize) END;
-                    DECLARE @NormalizedPage INT = CASE WHEN @Page < 1 THEN 1 WHEN @Page > @TotalPages THEN @TotalPages ELSE @Page END;
-                    DECLARE @Offset INT = (@NormalizedPage - 1) * @PageSize;
+        IF @SortBy NOT IN (''Id'', ''Code'', ''Name'', ''SaleStartDate'') SET @SortBy = ''Id'';
+        IF @SortOrder NOT IN (''ASC'', ''DESC'') SET @SortOrder = ''ASC'';
 
-                    SELECT (
-                        SELECT
-                            Page = @NormalizedPage,
-                            PageSize = @PageSize,
-                            TotalCount = @TotalCount,
-                            Items = (
-                                SELECT
-                                    p.Id,
-                                    p.Code,
-                                    p.Name,
-                                    p.Description,
-                                    p.SaleStartDate,
-                                    p.Image
-                                FROM dbo.Products p 
-                                ORDER BY 'QUOTENAME(@SortField)' @SortOrder  
-                                OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
-                                FOR JSON PATH
-                            )
-                        FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-                    ) AS ResultJson;
-                END');
-            END;
+        DECLARE @TotalCount INT = (SELECT COUNT(*) FROM dbo.Products);
+        DECLARE @TotalPages INT = CASE WHEN @TotalCount = 0 THEN 1 ELSE CEILING(CAST(@TotalCount AS DECIMAL(18,2)) / @PageSize) END;
+        DECLARE @NormalizedPage INT = CASE WHEN @Page < 1 THEN 1 WHEN @Page > @TotalPages THEN @TotalPages ELSE @Page END;
+        DECLARE @Offset INT = (@NormalizedPage - 1) * @PageSize;
+
+        DECLARE @sql NVARCHAR(MAX) = N''
+            SELECT (
+                SELECT
+                    Page = @NormalizedPage,
+                    PageSize = @PageSize,
+                    TotalCount = @TotalCount,
+                    Items = (
+                        SELECT p.Id, p.Code, p.Name, p.Description, p.SaleStartDate, p.Image
+                        FROM dbo.Products p
+                        ORDER BY '' + QUOTENAME(@SortBy) + N'' '' + @SortOrder + N''
+                        OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY
+                        FOR JSON PATH
+                    )
+                FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+            ) AS ResultJson;'';
+
+        EXEC sp_executesql @sql,
+            N''@NormalizedPage INT, @PageSize INT, @TotalCount INT, @Offset INT'',
+            @NormalizedPage, @PageSize, @TotalCount, @Offset;
+    END');
+END;
 
             IF OBJECT_ID(N'dbo.sp_Products_GetByIdJson', N'P') IS NULL
             BEGIN
@@ -87,6 +92,7 @@ public class ProductsRepository : IProductsRepository
                             Name,
                             Description,
                             SaleStartDate,
+                            InStock,
                             Image
                         FROM dbo.Products
                         WHERE Id = @Id
@@ -108,15 +114,17 @@ public class ProductsRepository : IProductsRepository
                         Name NVARCHAR(200),
                         Description NVARCHAR(MAX),
                         SaleStartDate DATE,
+                        InStock BIT,
                         Image NVARCHAR(500)
                     );
 
-                    INSERT INTO @Payload (Code, Name, Description, SaleStartDate, Image)
+                    INSERT INTO @Payload (Code, Name, Description, SaleStartDate, InStock, Image)
                     SELECT
                         j.Code,
                         j.Name,
                         j.Description,
                         j.SaleStartDate,
+                        j.InStock,
                         j.Image
                     FROM OPENJSON(@ProductJson)
                     WITH (
@@ -124,11 +132,12 @@ public class ProductsRepository : IProductsRepository
                         Name NVARCHAR(200) ''$.name'',
                         Description NVARCHAR(MAX) ''$.description'',
                         SaleStartDate DATE ''$.saleStartDate'',
+                        InStock BIT ''$.inStock'',
                         Image NVARCHAR(500) ''$.image''
                     ) AS j;
 
-                    INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, Image)
-                    SELECT Code, Name, Description, SaleStartDate, Image
+                    INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, InStock, Image)
+                    SELECT Code, Name, Description, SaleStartDate, InStock, Image
                     FROM @Payload;
 
                     SELECT TOP(1)
@@ -137,6 +146,7 @@ public class ProductsRepository : IProductsRepository
                         Name,
                         Description,
                         SaleStartDate,
+                        InStock,
                         Image
                     FROM dbo.Products
                     ORDER BY Id DESC
@@ -158,15 +168,17 @@ public class ProductsRepository : IProductsRepository
                         Name NVARCHAR(200),
                         Description NVARCHAR(MAX),
                         SaleStartDate DATE,
+                        InStock BIT,
                         Image NVARCHAR(500)
                     );
 
-                    INSERT INTO @Payload (Code, Name, Description, SaleStartDate, Image)
+                    INSERT INTO @Payload (Code, Name, Description, SaleStartDate, InStock, Image)
                     SELECT
                         j.Code,
                         j.Name,
                         j.Description,
                         j.SaleStartDate,
+                        j.InStock,
                         j.Image
                     FROM OPENJSON(@ProductJson)
                     WITH (
@@ -174,6 +186,7 @@ public class ProductsRepository : IProductsRepository
                         Name NVARCHAR(200) ''$.name'',
                         Description NVARCHAR(MAX) ''$.description'',
                         SaleStartDate DATE ''$.saleStartDate'',
+                        InStock BIT ''$.inStock'',
                         Image NVARCHAR(500) ''$.image''
                     ) AS j;
 
@@ -183,6 +196,7 @@ public class ProductsRepository : IProductsRepository
                         p.Name = payload.Name,
                         p.Description = payload.Description,
                         p.SaleStartDate = payload.SaleStartDate,
+                        p.InStock = payload.InStock,
                         p.Image = payload.Image
                     FROM dbo.Products p
                     CROSS JOIN @Payload AS payload
@@ -194,6 +208,7 @@ public class ProductsRepository : IProductsRepository
                         Name,
                         Description,
                         SaleStartDate,
+                        InStock,
                         Image
                     FROM dbo.Products
                     WHERE Id = @Id
@@ -221,17 +236,49 @@ public class ProductsRepository : IProductsRepository
         if (count == 0)
         {
             using var seed = new SqlCommand(@"
-                INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, Image)
+                INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, InStock, Image)
                 VALUES
-                    (N'P-1001', N'AeroFlex Smartwatch', N'Lightweight fitness smartwatch with heart-rate tracking and GPS support.', '2025-01-14', N'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=800&q=80'),
-                    (N'P-1002', N'LumaDesk Lamp', N'Minimal desk lighting with adjustable brightness and warm-to-cool tones.', '2025-02-03', N'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80'),
-                    (N'P-1003', N'Terra Bottle', N'Insulated stainless-steel bottle designed for travel and daily hydration.', '2025-03-11', N'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=800&q=80'),
-                    (N'P-1004', N'Orbit Headphones', N'Noise-canceling over-ear headphones with studio-quality sound output.', '2025-04-09', N'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=800&q=80');
+                    (N'P-1001', N'AeroFlex Smartwatch', N'Lightweight fitness smartwatch with heart-rate tracking and GPS support.', '2025-01-14', 1, N'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=800&q=80'),
+                    (N'P-1002', N'LumaDesk Lamp', N'Minimal desk lighting with adjustable brightness and warm-to-cool tones.', '2025-02-03', 1, N'https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80'),
+                    (N'P-1003', N'Terra Bottle', N'Insulated stainless-steel bottle designed for travel and daily hydration.', '2025-03-11', 0, N'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=800&q=80'),
+                    (N'P-1004', N'Orbit Headphones', N'Noise-canceling over-ear headphones with studio-quality sound output.', '2025-04-09', 1, N'https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=800&q=80');
             ", connection);
 
             seed.ExecuteNonQuery();
         }
     }
+
+private void EnsureDatabaseFileExists()
+{
+    // Path to the .mdf inside App_Data
+    var dataDir = AppDomain.CurrentDomain.GetData("DataDirectory") as string
+                  ?? Path.Combine(AppContext.BaseDirectory, "App_Data");
+    Directory.CreateDirectory(dataDir);   // make sure App_Data exists
+    var mdfPath = Path.Combine(dataDir, "ProductsDb.mdf");
+
+    if (File.Exists(mdfPath))
+        return;   // already created, nothing to do
+
+    // Connect to master (not AttachDbFilename) to create the database
+    var masterConnStr = "Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=true;TrustServerCertificate=True";
+    using var conn = new SqlConnection(masterConnStr);
+    conn.Open();
+
+    var ldfPath = Path.Combine(dataDir, "ProductsDb_log.ldf");
+    // Drop any stale registration, then create fresh with explicit file paths
+    var sql = $@"
+        IF DB_ID('ProductsDb') IS NOT NULL
+        BEGIN
+            ALTER DATABASE [ProductsDb] SET OFFLINE WITH ROLLBACK IMMEDIATE;
+            EXEC sp_detach_db 'ProductsDb';
+        END
+        CREATE DATABASE [ProductsDb] ON (NAME='ProductsDb', FILENAME='{mdfPath}')
+            LOG ON (NAME='ProductsDb_log', FILENAME='{ldfPath}');
+        EXEC sp_detach_db 'ProductsDb';";
+
+    using var cmd = new SqlCommand(sql, conn);
+    cmd.ExecuteNonQuery();
+}
 
     public async Task<List<Product>> GetAllAsync()
     {
@@ -282,8 +329,10 @@ public class ProductsRepository : IProductsRepository
                     Name = item.TryGetProperty("Name", out var nameElement) ? nameElement.GetString() ?? string.Empty : string.Empty,
                     Description = item.TryGetProperty("Description", out var descriptionElement) ? descriptionElement.GetString() ?? string.Empty : string.Empty,
                     SaleStartDate = item.TryGetProperty("SaleStartDate", out var dateElement) ? DateTime.Parse(dateElement.GetString() ?? DateTime.Today.ToString("yyyy-MM-dd")) : DateTime.Today,
+                    InStock = item.TryGetProperty("InStock", out var inStockElement) && inStockElement.ValueKind != JsonValueKind.Null ? inStockElement.GetBoolean() : true,
                     Image = item.TryGetProperty("Image", out var imageElement) ? imageElement.GetString() ?? string.Empty : string.Empty
                 });
+                _logger.LogDebug("Fetched product: {ProductId} - {ProductName}, with in-stock status: {InStock}", result.Items.Last().Id, result.Items.Last().Name, result.Items.Last().InStock);
             }
         }
 
@@ -344,6 +393,7 @@ public class ProductsRepository : IProductsRepository
             Name = item.TryGetProperty("Name", out var nameElement) ? nameElement.GetString() ?? string.Empty : string.Empty,
             Description = item.TryGetProperty("Description", out var descriptionElement) ? descriptionElement.GetString() ?? string.Empty : string.Empty,
             SaleStartDate = item.TryGetProperty("SaleStartDate", out var dateElement) ? DateTime.Parse(dateElement.GetString() ?? DateTime.Today.ToString("yyyy-MM-dd")) : DateTime.Today,
+            InStock = item.TryGetProperty("InStock", out var inStockElement) && inStockElement.ValueKind != JsonValueKind.Null ? inStockElement.GetBoolean() : true,
             Image = item.TryGetProperty("Image", out var imageElement) ? imageElement.GetString() ?? string.Empty : string.Empty
         };
     }
@@ -375,8 +425,10 @@ public class ProductsRepository : IProductsRepository
             name = product.Name,
             description = product.Description,
             saleStartDate = product.SaleStartDate.ToString("yyyy-MM-dd"),
-            image = product.Image
+            image = product.Image,
+            inStock = product.InStock
         };
+        _logger.LogInformation("Creating product with SKU {Sku} and in-stock status {InStock}", payload.code, payload.inStock);
 
         using var command = new SqlCommand("dbo.sp_Products_CreateJson", connection)
         {
@@ -401,6 +453,7 @@ public class ProductsRepository : IProductsRepository
             Name = item.TryGetProperty("Name", out var nameElement) ? nameElement.GetString() ?? string.Empty : product.Name,
             Description = item.TryGetProperty("Description", out var descriptionElement) ? descriptionElement.GetString() ?? string.Empty : product.Description,
             SaleStartDate = item.TryGetProperty("SaleStartDate", out var dateElement) ? DateTime.Parse(dateElement.GetString() ?? product.SaleStartDate.ToString("yyyy-MM-dd")) : product.SaleStartDate,
+            InStock = item.TryGetProperty("InStock", out var inStockElement) && inStockElement.ValueKind != JsonValueKind.Null ? inStockElement.GetBoolean() : product.InStock,
             Image = item.TryGetProperty("Image", out var imageElement) ? imageElement.GetString() ?? string.Empty : product.Image
         };
     }
@@ -448,6 +501,7 @@ public class ProductsRepository : IProductsRepository
             Name = item.TryGetProperty("Name", out var nameElement) ? nameElement.GetString() ?? string.Empty : product.Name,
             Description = item.TryGetProperty("Description", out var descriptionElement) ? descriptionElement.GetString() ?? string.Empty : product.Description,
             SaleStartDate = item.TryGetProperty("SaleStartDate", out var dateElement) ? DateTime.Parse(dateElement.GetString() ?? product.SaleStartDate.ToString("yyyy-MM-dd")) : product.SaleStartDate,
+            InStock = item.TryGetProperty("InStock", out var inStockElement) && inStockElement.ValueKind != JsonValueKind.Null ? inStockElement.GetBoolean() : product.InStock,
             Image = item.TryGetProperty("Image", out var imageElement) ? imageElement.GetString() ?? string.Empty : product.Image
         };
     }

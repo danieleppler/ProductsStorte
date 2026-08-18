@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "/Users/danieleppler/Documents/ProductsStore/backend/backend.csproj": {}
+    "C:\\Projects\\ProductsStore\\backend\\backend.csproj": {}
   },
   "projects": {
-    "/Users/danieleppler/Documents/ProductsStore/backend/backend.csproj": {
+    "C:\\Projects\\ProductsStore\\backend\\backend.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/danieleppler/Documents/ProductsStore/backend/backend.csproj",
+        "projectUniqueName": "C:\\Projects\\ProductsStore\\backend\\backend.csproj",
         "projectName": "backend",
-        "projectPath": "/Users/danieleppler/Documents/ProductsStore/backend/backend.csproj",
-        "packagesPath": "/Users/danieleppler/.nuget/packages/",
-        "outputPath": "/Users/danieleppler/Documents/ProductsStore/backend/obj/",
+        "projectPath": "C:\\Projects\\ProductsStore\\backend\\backend.csproj",
+        "packagesPath": "C:\\Users\\danieleppler\\.nuget\\packages\\",
+        "outputPath": "C:\\Projects\\ProductsStore\\backend\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "/Users/danieleppler/.nuget/NuGet/NuGet.Config"
+          "C:\\Users\\danieleppler\\AppData\\Roaming\\NuGet\\NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net8.0"
@@ -24,6 +24,7 @@
         },
         "frameworks": {
           "net8.0": {
+            "framework": "net8.0",
             "targetAlias": "net8.0",
             "projectReferences": {}
           }
@@ -37,10 +38,12 @@
           "enableAudit": "true",
           "auditLevel": "low",
           "auditMode": "direct"
-        }
+        },
+        "SdkAnalysisLevel": "10.0.400"
       },
       "frameworks": {
         "net8.0": {
+          "framework": "net8.0",
           "targetAlias": "net8.0",
           "dependencies": {
             "Microsoft.AspNetCore.OpenApi": {
@@ -67,6 +70,12 @@
           ],
           "assetTargetFallback": true,
           "warn": true,
+          "downloadDependencies": [
+            {
+              "name": "Microsoft.NETCore.App.Host.win-x64",
+              "version": "[8.0.30, 8.0.30]"
+            }
+          ],
           "frameworkReferences": {
             "Microsoft.AspNetCore.App": {
               "privateAssets": "none"
@@ -75,7 +84,12 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/8.0.424/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400/PortableRuntimeIdentifierGraph.json"
+        }
+      },
+      "runtimes": {
+        "win-x64": {
+          "#import": []
         }
       }
     }

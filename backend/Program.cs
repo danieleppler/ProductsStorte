@@ -2,6 +2,8 @@ using Microsoft.VisualBasic;
 
 var builder = WebApplication.CreateBuilder(args);
 
+
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -16,12 +18,16 @@ builder.Services.AddCors(options =>
 });
 
 var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Server=localhost;Database=ProductsDb;Trusted_Connection=True;TrustServerCertificate=True;";
+    ?? "Server=(localdb)\\MSSQLLocalDB;Database=ProductsDb;Trusted_Connection=True;TrustServerCertificate=True;";
 
 builder.Services.AddSingleton<IProductsRepository>(sp => 
 new ProductsRepository(defaultConnection,sp.GetRequiredService<ILogger<ProductsRepository>>()));
 
 var app = builder.Build();
+
+AppDomain.CurrentDomain.SetData("DataDirectory",
+    Path.Combine(builder.Environment.ContentRootPath, "App_Data"));
+    
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ProductsApi");
 
 if (app.Environment.IsDevelopment())
@@ -66,13 +72,14 @@ app.MapGet("/products/{id:int}", async (int id, IProductsRepository repo) =>
 
 app.MapPost("/products", async (CreateProductRequest request, IProductsRepository repo) =>
 {
-    logger.LogInformation("Creating product with SKU {Sku}", request.Code);
+    logger.LogInformation("Creating product with SKU {Sku} and in-stock status {InStock}", request.Code, request.InStock);
     var created = await repo.CreateAsync(new Product
     {
         Code = request.Code,
         Name = request.Name,
         Description = request.Description,
         SaleStartDate = request.SaleStartDate,
+        InStock = request.InStock,
         Image = request.Image
     });
 
@@ -88,6 +95,7 @@ app.MapPut("/products/{id:int}", async (int id, UpdateProductRequest request, IP
         Name = request.Name,
         Description = request.Description,
         SaleStartDate = request.SaleStartDate,
+        InStock = request.InStock,
         Image = request.Image
     });
 
@@ -102,17 +110,3 @@ app.MapDelete("/products/{id:int}", async (int id, IProductsRepository repo) =>
 });
 
 app.Run();
-
-public record CreateProductRequest(
-    string Code,
-    string Name,
-    string Description,
-    DateTime SaleStartDate,
-    string Image);
-
-public record UpdateProductRequest(
-    string Code,
-    string Name,
-    string Description,
-    DateTime SaleStartDate,
-    string Image);

@@ -1,0 +1,15 @@
+# Build output
+bin/
+obj/
+
+# Database files
+*.mdf
+*.ldf
+App_Data/
+
+# Node
+node_modules/
+
+# IDE
+.vs/
+.vscode/
