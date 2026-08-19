@@ -1,5 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import {useSku} from './composables/useSku'
+
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
@@ -10,6 +12,8 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import mockProducts from './data/products'
+
+const {ensureNextSku,advanceSku,getNextSkuFromCache} = useSku()
 
 const API_URL = 'http://localhost:5000/products'
 const API_URLS = [API_URL]
@@ -66,66 +70,6 @@ const productToDelete = ref(null)
 const pageSize = ref(5)
 const currentPage = ref(1)
 const totalRecords = ref(0)
-const skuCache = ref(null)
-let skuRequest = null
-
-
-
-const parseSkuNumber = (value) => {
-  const match = String(value ?? '').match(/(\d+)(?!.*\d)/)
-  return match ? Number(match[1]) : null
-}
-
-const buildSku = (value) => `SKU-${String(value).padStart(4, '0')}`
-
-const getNextSkuFromCache = () => skuCache.value || 'SKU-0001'
-
-const advanceSku = (value) => {
-  const numericPart = parseSkuNumber(value)
-  if (numericPart === null) {
-    skuCache.value = 'SKU-0001'
-    return skuCache.value
-  }
-
-  skuCache.value = buildSku(numericPart + 1)
-  return skuCache.value
-}
-
-const fetchNextSkuFromBackend = async () => {
-  try {
-    //FIXME: need to change to single api url
-    const apiBaseUrl = API_URLS[0].replace(/\/products$/, '')
-    const response = await fetch(`${apiBaseUrl}/products/next-sku`)
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-
-    const payload = await response.json()
-    const nextSku = payload?.sku || payload?.data || 'SKU-0001'
-    skuCache.value = nextSku
-    return nextSku
-  } catch (err) {
-    const fallbackSku = getNextSkuFromCache()
-    skuCache.value = fallbackSku
-    return fallbackSku
-  }
-}
-
-const ensureNextSku = async () => {
-  if (skuCache.value) {
-    return skuCache.value
-  }
-
-  //Prevent double backend fetching 
-  if (!skuRequest) {
-    skuRequest = fetchNextSkuFromBackend().finally(() => {
-      skuRequest = null
-    })
-  }
-
-  return skuRequest
-}
 
 
 const emptyProductForm = (prefillSku = '') => ({
