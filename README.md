@@ -14,7 +14,7 @@ A full-stack product management application with a Vue 3 frontend and an ASP.NET
 - Microsoft.Data.SqlClient (raw ADO.NET, no Entity Framework)
 - SQL Server LocalDB with an internal `.mdf` data file
 - Stored procedures using `OPENJSON` (input) and `FOR JSON PATH` (output)
-- Swagger / Swashbuckle for API documentation
+  
 
 ## Architecture
 
