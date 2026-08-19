@@ -9,18 +9,18 @@ public class ProductsRepository : IProductsRepository
     private readonly ILogger<ProductsRepository> _logger;
 
     //logger injected
-    public ProductsRepository(string connectionString,ILogger<ProductsRepository> logger)
+    public ProductsRepository(string connectionString, ILogger<ProductsRepository> logger)
     {
         _connectionString = connectionString;
         _logger = logger;
     }
 
-    public void InitializeDatabase()
+   public void InitializeDatabase()
     {
         EnsureDatabaseFileExists();
         using var connection = new SqlConnection(_connectionString);
         connection.Open();
-        _logger.LogDebug("Initalizing database");   
+        _logger.LogDebug("Initalizing database");
 
         using var command = new SqlCommand(@"
             IF OBJECT_ID(N'dbo.Products', N'U') IS NULL
@@ -116,23 +116,8 @@ public class ProductsRepository : IProductsRepository
                 BEGIN
                     SET NOCOUNT ON;
 
-                    DECLARE @Payload TABLE (
-                        Code NVARCHAR(100),
-                        Name NVARCHAR(200),
-                        Description NVARCHAR(MAX),
-                        SaleStartDate DATE,
-                        InStock BIT,
-                        Image NVARCHAR(500)
-                    );
-
-                    INSERT INTO @Payload (Code, Name, Description, SaleStartDate, InStock, Image)
-                    SELECT
-                        j.Code,
-                        j.Name,
-                        j.Description,
-                        j.SaleStartDate,
-                        j.InStock,
-                        j.Image
+                    INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, InStock, Image)
+                    SELECT Code, Name, Description, SaleStartDate, InStock, Image
                     FROM OPENJSON(@ProductJson)
                     WITH (
                         Code NVARCHAR(100) ''$.code'',
@@ -141,11 +126,7 @@ public class ProductsRepository : IProductsRepository
                         SaleStartDate DATE ''$.saleStartDate'',
                         InStock BIT ''$.inStock'',
                         Image NVARCHAR(500) ''$.image''
-                    ) AS j;
-
-                    INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, InStock, Image)
-                    SELECT Code, Name, Description, SaleStartDate, InStock, Image
-                    FROM @Payload;
+                    );
 
                     SELECT TOP(1)
                         Id,
@@ -170,43 +151,24 @@ public class ProductsRepository : IProductsRepository
                 BEGIN
                     SET NOCOUNT ON;
 
-                    DECLARE @Payload TABLE (
-                        Code NVARCHAR(100),
-                        Name NVARCHAR(200),
-                        Description NVARCHAR(MAX),
-                        SaleStartDate DATE,
-                        InStock BIT,
-                        Image NVARCHAR(500)
-                    );
-
-                    INSERT INTO @Payload (Code, Name, Description, SaleStartDate, InStock, Image)
-                    SELECT
-                        j.Code,
-                        j.Name,
-                        j.Description,
-                        j.SaleStartDate,
-                        j.InStock,
-                        j.Image
-                    FROM OPENJSON(@ProductJson)
-                    WITH (
-                        Code NVARCHAR(100) ''$.code'',
-                        Name NVARCHAR(200) ''$.name'',
-                        Description NVARCHAR(MAX) ''$.description'',
-                        SaleStartDate DATE ''$.saleStartDate'',
-                        InStock BIT ''$.inStock'',
-                        Image NVARCHAR(500) ''$.image''
-                    ) AS j;
-
                     UPDATE p
                     SET
-                        p.Code = payload.Code,
-                        p.Name = payload.Name,
-                        p.Description = payload.Description,
-                        p.SaleStartDate = payload.SaleStartDate,
-                        p.InStock = payload.InStock,
-                        p.Image = payload.Image
+                        p.Code = j.Code,
+                        p.Name = j.Name,
+                        p.Description = j.Description,
+                        p.SaleStartDate = j.SaleStartDate,
+                        p.InStock = j.InStock,
+                        p.Image = j.Image
                     FROM dbo.Products p
-                    CROSS JOIN @Payload AS payload
+                    CROSS JOIN OPENJSON(@ProductJson)
+                        WITH (
+                            Code NVARCHAR(100) ''$.code'',
+                            Name NVARCHAR(200) ''$.name'',
+                            Description NVARCHAR(MAX) ''$.description'',
+                            SaleStartDate DATE ''$.saleStartDate'',
+                            InStock BIT ''$.inStock'',
+                            Image NVARCHAR(500) ''$.image''
+                        ) AS j
                     WHERE p.Id = @Id;
 
                     SELECT TOP(1)
@@ -240,10 +202,8 @@ public class ProductsRepository : IProductsRepository
         using var seedCheck = new SqlCommand("SELECT COUNT(*) FROM dbo.Products", connection);
         var count = Convert.ToInt32(seedCheck.ExecuteScalar());
 
-        
         if (count == 0)
         {
-        //seed the table for the first time
             using var seed = new SqlCommand(@"
                 INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, InStock, Image)
                 VALUES
@@ -256,26 +216,26 @@ public class ProductsRepository : IProductsRepository
             seed.ExecuteNonQuery();
         }
     }
-
+    
     private void EnsureDatabaseFileExists()
-{
-    // Path to the .mdf inside App_Data
-    var dataDir = AppDomain.CurrentDomain.GetData("DataDirectory") as string
-                  ?? Path.Combine(AppContext.BaseDirectory, "App_Data");
-    Directory.CreateDirectory(dataDir);   // make sure App_Data exists
-    var mdfPath = Path.Combine(dataDir, "ProductsDb.mdf");
+    {
+        // Path to the .mdf inside App_Data
+        var dataDir = AppDomain.CurrentDomain.GetData("DataDirectory") as string
+                      ?? Path.Combine(AppContext.BaseDirectory, "App_Data");
+        Directory.CreateDirectory(dataDir);   // make sure App_Data exists
+        var mdfPath = Path.Combine(dataDir, "ProductsDb.mdf");
 
-    if (File.Exists(mdfPath))
-        return;   // already created, nothing to do
+        if (File.Exists(mdfPath))
+            return;   // already created, nothing to do
 
-    // Connect to master (not AttachDbFilename) to create the database
-    var masterConnStr = "Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=true;TrustServerCertificate=True";
-    using var conn = new SqlConnection(masterConnStr);
-    conn.Open();
+        // Connect to master (not AttachDbFilename) to create the database
+        var masterConnStr = "Server=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=true;TrustServerCertificate=True";
+        using var conn = new SqlConnection(masterConnStr);
+        conn.Open();
 
-    var ldfPath = Path.Combine(dataDir, "ProductsDb_log.ldf");
-    // Drop any stale registration, then create fresh with explicit file paths
-    var sql = $@"
+        var ldfPath = Path.Combine(dataDir, "ProductsDb_log.ldf");
+        // Drop any stale registration, then create fresh with explicit file paths
+        var sql = $@"
         IF DB_ID('ProductsDb') IS NOT NULL
         BEGIN
             ALTER DATABASE [ProductsDb] SET OFFLINE WITH ROLLBACK IMMEDIATE;
@@ -285,9 +245,9 @@ public class ProductsRepository : IProductsRepository
             LOG ON (NAME='ProductsDb_log', FILENAME='{ldfPath}');
         EXEC sp_detach_db 'ProductsDb';";
 
-    using var cmd = new SqlCommand(sql, conn);
-    cmd.ExecuteNonQuery();
-}
+        using var cmd = new SqlCommand(sql, conn);
+        cmd.ExecuteNonQuery();
+    }
 
     public async Task<List<Product>> GetAllAsync()
     {
@@ -295,7 +255,7 @@ public class ProductsRepository : IProductsRepository
         return pageResult.Items;
     }
 
-    public async Task<PagedResult<Product>> GetPageAsync(int page, int pageSize, string sortBy ="Id", string sortOrder = "ASC")
+    public async Task<PagedResult<Product>> GetPageAsync(int page, int pageSize, string sortBy = "Id", string sortOrder = "ASC")
     {
         await using var connection = new SqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -306,8 +266,8 @@ public class ProductsRepository : IProductsRepository
         };
         command.Parameters.Add("@Page", SqlDbType.Int).Value = page;
         command.Parameters.Add("@PageSize", SqlDbType.Int).Value = pageSize;
-        command.Parameters.Add("@SortBy",SqlDbType.VarChar).Value = sortBy;
-        command.Parameters.Add("@SortOrder",SqlDbType.VarChar).Value = sortOrder;
+        command.Parameters.Add("@SortBy", SqlDbType.VarChar).Value = sortBy;
+        command.Parameters.Add("@SortOrder", SqlDbType.VarChar).Value = sortOrder;
 
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync())
@@ -441,7 +401,7 @@ public class ProductsRepository : IProductsRepository
             image = product.Image,
             inStock = product.InStock
         };
-        
+
         var jsonPayload = JsonSerializer.Serialize(payload);
         _logger.LogInformation("Creating product with SKU {Sku} and in-stock status {InStock}. JSON payload: {JsonPayload}", payload.code, payload.inStock, jsonPayload);
 
@@ -544,5 +504,5 @@ public class ProductsRepository : IProductsRepository
         return rows > 0;
     }
 
-  
+
 }
