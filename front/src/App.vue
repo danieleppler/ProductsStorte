@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import {useSku} from './composables/useSku'
-
+import { normalizeProduct } from './utils/product'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Checkbox from 'primevue/checkbox'
@@ -13,7 +13,10 @@ import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import mockProducts from './data/products'
 
+import { useProducts } from './composables/useProducts'
+
 const {ensureNextSku,advanceSku,getNextSkuFromCache} = useSku()
+const { products, loading, error, totalRecords, load, add, edit, remove } = useProducts()
 
 const API_URL = 'http://localhost:5000/products'
 const API_URLS = [API_URL]
@@ -35,23 +38,8 @@ const resolveImageUrl = (imagePath) => {
   return imagePath
 }
 
-const normalizeProduct = (product = {}) => ({
-  ...product,
-  inStock: (() => {
-    const val = product.inStock ?? product.InStock
-    if (typeof val === 'boolean') return val
-    if (val === 1 || val === '1' || val === true || val === 'true') return true
-    if (val === 0 || val === '0' || val === false || val === 'false') return false
-    return true
-  })(),
-  saleStartDate: product.saleStartDate ?? product.SaleStartDate,
-  image: product.image ?? product.Image ?? '/images/products/default-product.svg',
-})
-
-const products = ref([])
 const search = ref('')
-const loading = ref(false)
-const error = ref('')
+
 const showAddDialog = ref(false)
 const showDeleteDialog = ref(false)
 const submitting = ref(false)
@@ -69,7 +57,7 @@ const dialogMode = ref('create')
 const productToDelete = ref(null)
 const pageSize = ref(5)
 const currentPage = ref(1)
-const totalRecords = ref(0)
+
 
 
 const emptyProductForm = (prefillSku = '') => ({
@@ -118,7 +106,7 @@ const openEditDialog = (product) => {
 
 // read/synce pagination params from/to url
 
-const syncUrlWithPagination = (page = currentPage.value, size = pageSize.value, sortBy = 'Id', sortOrder = '1') => {
+const syncUrl = (page = currentPage.value, size = pageSize.value, sortBy = 'Id', sortOrder = '1') => {
   const params = new URLSearchParams(window.location.search)
   params.set('page', String(page))
   params.set('pageSize', String(size))
@@ -140,36 +128,12 @@ const readPaginationFromUrl = () => {
   pageSize.value = Number.isFinite(size) && size > 0 ? size : 5
 }
 
+//update the current page and page size, and sync the url with the new values. Then load the products from the backend with the new url params.
 const loadProducts = async (page = currentPage.value, size = pageSize.value, sortBy = 'Id', sortOrder = '1') => {
-  loading.value = true
-  error.value = ''
   currentPage.value = page
   pageSize.value = size
-  syncUrlWithPagination(page, size, sortBy, sortOrder)
-  console.log('Loading products from API...', { page, pageSize: size })
-  try {
-   
-        const url = `${API_URL}?page=${page}&pageSize=${size}&sortBy=${sortBy}&sortOrder=${sortOrder}`
-        console.log('Fetching products from', url)
-        const response = await fetch(url)
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`)
-        }
-
-        const data = await response.json()
-        const normalizedProducts = (data.items ?? data ?? []).map(normalizeProduct)
-        products.value = normalizedProducts
-        totalRecords.value = data.totalCount ?? normalizedProducts.length
-        return
-    }
-    catch (err) {
-    console.error('Failed to load products from API:', err)
-    error.value = 'Unable to load products from the API. The database may be unavailable.'
-    totalRecords.value = products.value.length || 0
-  } finally {
-    loading.value = false
-  }
+  syncUrl(page, size, sortBy, sortOrder)
+   return load({ page, pageSize: size, sortBy, sortOrder })
 }
 
 const uploadProductImage = (event) => {
@@ -218,16 +182,15 @@ const uploadSelectedImage = async () => {
 }
 
 const saveProduct = async () => {
+  //validation of product name
   const trimmedName = productForm.name.trim()
   if (!trimmedName) {
     error.value = 'Product name is required.'
     nextTick(focusErrorBanner)
     return
   }
-
   submitting.value = true
   console.log('saving product:', productForm, 'InStock:', productForm.inStock)
-
   try {
     const uploadedImage = await uploadSelectedImage()
     const payload = {
@@ -238,83 +201,17 @@ const saveProduct = async () => {
       inStock: !!productForm.inStock,
       image: uploadedImage,
     }
-
     console.log('Saving product payload:', payload)
 
-    if (dialogMode.value === 'edit' && productForm.id) {
-      let updatedProduct = null
-
-      for (const apiUrl of API_URLS) {
-        try {
-          console.log('Updating product', productForm.id, 'at', `${apiUrl}/${productForm.id}`)
-          const response = await fetch(`${apiUrl}/${productForm.id}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-          })
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`)
-          }
-
-          updatedProduct = await response.json()
-          break
-        } catch (err) {
-          updatedProduct = null
-        }
-      }
-
-      if (updatedProduct) {
-        const normalizedUpdatedProduct = normalizeProduct(updatedProduct)
-        products.value = products.value.map((product) => product.id === productForm.id
-          ? { ...product, ...normalizedUpdatedProduct, inStock: normalizedUpdatedProduct.inStock, id: product.id }
-          : product)
-      } else {
-        products.value = products.value.map((product) => product.id === productForm.id ? { ...product, ...payload, inStock: !!payload.inStock, id: product.id } : product)
-      }
+       if (dialogMode.value === 'edit') {
+      await edit(productForm.id, payload)
     } else {
-      let savedProduct = null
-
-      for (const apiUrl of API_URLS) {
-        try {
-          console.log('Creating product at', apiUrl)
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-          })
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`)
-          }
-
-          savedProduct = await response.json()
-          break
-        } catch (err) {
-          savedProduct = null
-        }
-      }
-
-      if (savedProduct) {
-        products.value = [normalizeProduct(savedProduct), ...products.value]
-      } else {
-        products.value = [{
-          id: Date.now(),
-          ...payload,
-        }, ...products.value]
-      }
-
+      await add(payload)
       advanceSku(payload.code)
     }
-
     showAddDialog.value = false
     resetProductForm(true)
   } catch (err) {
-    console.error('Failed to save product:', err)
     error.value = err instanceof Error ? err.message : 'Could not save the product.'
     nextTick(focusErrorBanner)
   } finally {
@@ -322,6 +219,7 @@ const saveProduct = async () => {
   }
 }
 
+//called after clicking delete product. showeing the "are you sure you want to delete?" dialog
 const confirmDelete = (product) => {
   productToDelete.value = product
   showDeleteDialog.value = true
@@ -329,42 +227,18 @@ const confirmDelete = (product) => {
 
 const deleteProduct = async () => {
   if (!productToDelete.value) return
-
-  
-
   try {
-    let deleted = false
-//FIXME: singular api
-    for (const apiUrl of API_URLS) {
-      try {
-        console.log('Deleting product', productToDelete.value.id, 'at', `${apiUrl}/${productToDelete.value.id}`)
-        const response = await fetch(`${apiUrl}/${productToDelete.value.id}`, {
-          method: 'DELETE',
-        })
-
-        if (response.ok || response.status === 204) {
-          deleted = true
-          break
-        }
-      } catch (err) {
-        deleted = false
-      }
-    }
-
-    if (deleted || productToDelete.value.id) {
-      products.value = products.value.filter((product) => product.id !== productToDelete.value.id)
-    }
+    await remove(productToDelete.value.id)
   } finally {
-
     showDeleteDialog.value = false
     productToDelete.value = null
   }
 }
 
-const onPage = (event) => {
-  const nextPage = Math.floor(event.first / event.rows) + 1
-  loadProducts(nextPage, event.rows)
-}
+//fetch the next page , take the current page stored in the event.first , and the current event rows per page
+const onPage = (event) =>  loadProducts(Math.floor(event.first / event.rows) + 1,event.rows)
+
+const onSort = (event) => loadProducts(currentPage.value,event.rows,event.sortField,event.sortOrder)
 
 onMounted(() => {
   readPaginationFromUrl()
@@ -434,9 +308,7 @@ const formatDate = (dateString) =>
     day: 'numeric',
   }).format(new Date(dateString))
 
-const onSort = (event) =>{
-  loadProducts(currentPage.value,event.rows,event.sortField,event.sortOrder)
-}
+
 </script>
 
 <template>

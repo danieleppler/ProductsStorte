@@ -475,6 +475,8 @@ private void EnsureDatabaseFileExists()
         using var document = JsonDocument.Parse(json);
         var item = document.RootElement;
 
+        item.TryGetProperty("Id", out var test);
+        _logger.LogInformation($"Created product with ID: {test}");
         return new Product
         {
             Id = item.TryGetProperty("Id", out var idElement) ? idElement.GetInt32() : 0,
@@ -487,6 +489,7 @@ private void EnsureDatabaseFileExists()
                 : product.InStock,
             Image = item.TryGetProperty("Image", out var imageElement) ? imageElement.GetString() ?? string.Empty : product.Image
         };
+
     }
 
     public async Task<Product?> UpdateAsync(int id, Product product)

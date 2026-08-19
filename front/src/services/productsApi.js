@@ -20,17 +20,20 @@ export async function createProduct(payload) {
 }
 
 export async function updateProduct(id, payload) {
+  console.log("about to send update request", id,payload)
   const res = await fetch(`${API_URL}/${id}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+    console.log(res)
   if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return res.json()
 }
 
 export async function deleteProductById(id) {
   const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' })
-  if (!res.ok && res.status !== 204) throw new Error(`HTTP ${res.status}`)
+  console.log(res)
+  //if (!res.ok) throw new Error(`HTTP ${res.status}`)
   return true
 }
