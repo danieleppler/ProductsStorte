@@ -18,8 +18,7 @@ import { useProducts } from './composables/useProducts'
 const {ensureNextSku,advanceSku,getNextSkuFromCache} = useSku()
 const { products, loading, error, totalRecords, load, add, edit, remove } = useProducts()
 
-const API_URL = 'http://localhost:5000/products'
-const API_URLS = [API_URL]
+const API_URL = import.meta.env.VITE_API_URL
 const API_BASE_URL = API_URL.replace(/\/products$/, '')
 
 const resolveImageUrl = (imagePath) => {
@@ -136,7 +135,10 @@ const loadProducts = async (page = currentPage.value, size = pageSize.value, sor
    return load({ page, pageSize: size, sortBy, sortOrder })
 }
 
-const uploadProductImage = (event) => {
+//save the product image in reactive variable, and store a path to that file in the productForm object
+//notice that productForm.image saves the temporray browser locations of the photo, for later use in <img :src="resolveImageUrl(productForm.image)">
+//the productForm.image with later be replaced with the actual path of the static file in the server
+const captureProductImage = (event) => {
   const file = event?.target?.files?.[0]
   if (!file) {
     selectedImageFile.value = null
@@ -439,7 +441,7 @@ const formatDate = (dateString) =>
 
       <div class="field-group">
         <label for="product-image">Product Image</label>
-        <input id="product-image" type="file" accept="image/*" @change="uploadProductImage" />
+        <input id="product-image" type="file" accept="image/*" @change="captureProductImage" />
         <div v-if="productForm.image" class="uploaded-image-preview">
           <img :src="resolveImageUrl(productForm.image)" :alt="productForm.name || 'Product preview'" />
         </div>

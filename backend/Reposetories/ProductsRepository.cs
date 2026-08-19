@@ -8,6 +8,7 @@ public class ProductsRepository : IProductsRepository
     private string _connectionString;
     private readonly ILogger<ProductsRepository> _logger;
 
+    //logger injected
     public ProductsRepository(string connectionString,ILogger<ProductsRepository> logger)
     {
         _connectionString = connectionString;
@@ -16,11 +17,10 @@ public class ProductsRepository : IProductsRepository
 
     public void InitializeDatabase()
     {
-
         EnsureDatabaseFileExists();
         using var connection = new SqlConnection(_connectionString);
         connection.Open();
-        _logger.LogDebug("Initalizing databaes");   
+        _logger.LogDebug("Initalizing database");   
 
         using var command = new SqlCommand(@"
             IF OBJECT_ID(N'dbo.Products', N'U') IS NULL
@@ -240,38 +240,24 @@ public class ProductsRepository : IProductsRepository
         using var seedCheck = new SqlCommand("SELECT COUNT(*) FROM dbo.Products", connection);
         var count = Convert.ToInt32(seedCheck.ExecuteScalar());
 
+        
         if (count == 0)
         {
+        //seed the table for the first time
             using var seed = new SqlCommand(@"
                 INSERT INTO dbo.Products (Code, Name, Description, SaleStartDate, InStock, Image)
                 VALUES
-                    (N'P-1001', N'AeroFlex Smartwatch', N'Lightweight fitness smartwatch with heart-rate tracking and GPS support.', '2025-01-14', 1, N'/images/products/aeroflex-smartwatch.svg'),
-                    (N'P-1002', N'LumaDesk Lamp', N'Minimal desk lighting with adjustable brightness and warm-to-cool tones.', '2025-02-03', 1, N'/images/products/lumadesk-lamp.svg'),
-                    (N'P-1003', N'Terra Bottle', N'Insulated stainless-steel bottle designed for travel and daily hydration.', '2025-03-11', 0, N'/images/products/terra-bottle.svg'),
-                    (N'P-1004', N'Orbit Headphones', N'Noise-canceling over-ear headphones with studio-quality sound output.', '2025-04-09', 1, N'/images/products/orbit-headphones.svg');
+                    (N'SKU-1001', N'AeroFlex Smartwatch', N'Lightweight fitness smartwatch with heart-rate tracking and GPS support.', '2025-01-14', 1, N'/images/products/aeroflex-smartwatch.svg'),
+                    (N'SKU-1002', N'LumaDesk Lamp', N'Minimal desk lighting with adjustable brightness and warm-to-cool tones.', '2025-02-03', 1, N'/images/products/lumadesk-lamp.svg'),
+                    (N'SKU-1003', N'Terra Bottle', N'Insulated stainless-steel bottle designed for travel and daily hydration.', '2025-03-11', 0, N'/images/products/terra-bottle.svg'),
+                    (N'SKU-1004', N'Orbit Headphones', N'Noise-canceling over-ear headphones with studio-quality sound output.', '2025-04-09', 1, N'/images/products/orbit-headphones.svg');
             ", connection);
 
             seed.ExecuteNonQuery();
         }
-        else
-        {
-            using var normalizeSeed = new SqlCommand(@"
-                UPDATE dbo.Products
-                SET Image = CASE Code
-                    WHEN N'P-1001' THEN N'/images/products/aeroflex-smartwatch.svg'
-                    WHEN N'P-1002' THEN N'/images/products/lumadesk-lamp.svg'
-                    WHEN N'P-1003' THEN N'/images/products/terra-bottle.svg'
-                    WHEN N'P-1004' THEN N'/images/products/orbit-headphones.svg'
-                    ELSE Image
-                END
-                WHERE Code IN (N'P-1001', N'P-1002', N'P-1003', N'P-1004');
-            ", connection);
-
-            normalizeSeed.ExecuteNonQuery();
-        }
     }
 
-private void EnsureDatabaseFileExists()
+    private void EnsureDatabaseFileExists()
 {
     // Path to the .mdf inside App_Data
     var dataDir = AppDomain.CurrentDomain.GetData("DataDirectory") as string

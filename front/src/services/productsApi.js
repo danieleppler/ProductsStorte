@@ -1,5 +1,5 @@
 // services/productsApi.js  — pure, no Vue, easily testable
-const API_URL = 'http://localhost:5000/products'
+const API_URL = import.meta.env.VITE_API_URL
 export const API_BASE_URL = API_URL.replace(/\/products$/, '')
 
 export async function fetchProducts({ page, pageSize, sortBy = 'Id', sortOrder = '1' }) {
