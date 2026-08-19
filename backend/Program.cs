@@ -3,8 +3,7 @@ using System.Text.RegularExpressions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -34,11 +33,6 @@ AppDomain.CurrentDomain.SetData("DataDirectory",
     
 var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("ProductsApi");
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
 
 app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
